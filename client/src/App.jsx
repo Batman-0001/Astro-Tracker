@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AsteroidDetail from './pages/AsteroidDetail';
+import AsteroidList from './pages/AsteroidList';
 import Visualization from './pages/Visualization';
 import LoadingScreen from './components/Common/LoadingScreen';
 import { ToastContainer } from './components/Common/Toast';
@@ -15,14 +16,6 @@ import useAlertStore from './stores/alertStore';
 import socketService from './services/socket';
 
 // Placeholder pages
-const AsteroidList = () => (
-  <div className="min-h-screen pt-24 px-6 pb-12">
-    <div className="max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold text-white mb-4">All Asteroids</h1>
-      <p className="text-white/50">Full asteroid catalog - coming soon with advanced filtering!</p>
-    </div>
-  </div>
-);
 
 const Watchlist = () => (
   <div className="min-h-screen pt-24 px-6 pb-12">
