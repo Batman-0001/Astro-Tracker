@@ -21,7 +21,12 @@ const chatMessageSchema = new mongoose.Schema(
     room: {
       type: String,
       default: "global",
-      enum: ["global"],
+      validate: {
+        validator: function (v) {
+          return v === "global" || /^asteroid:[a-zA-Z0-9_-]+$/.test(v);
+        },
+        message: "Room must be 'global' or 'asteroid:<id>'",
+      },
     },
   },
   {

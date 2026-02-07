@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import useAsteroidStore from "../stores/asteroidStore";
 import useAuthStore from "../stores/authStore";
+import AsteroidChat from "../components/Chat/AsteroidChat";
 
 const AsteroidDetail = () => {
   const { id } = useParams();
@@ -566,6 +567,19 @@ const AsteroidDetail = () => {
               </div>
             </div>
           </motion.div>
+        </div>
+      </section>
+
+      {/* Asteroid Discussion */}
+      <section className="px-6 py-8">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-2xl font-bold text-white mb-6">
+            Community Discussion
+          </h2>
+          <AsteroidChat
+            asteroidId={asteroid.neo_reference_id}
+            asteroidName={asteroid.name}
+          />
         </div>
       </section>
     </div>

@@ -212,24 +212,60 @@ chatNsp.on("connection", (socket) => {
 
   socket.join("global");
 
-  // Handle incoming messages
+  // Join an asteroid-specific chat room
+  socket.on("chat:join_room", (room) => {
+    if (room && /^asteroid:[a-zA-Z0-9_-]+$/.test(room)) {
+      socket.join(room);
+      console.log(`💬 ${socket.user.displayName} joined room: ${room}`);
+      // Notify room members
+      const roomUsers = chatNsp.adapter.rooms.get(room);
+      chatNsp
+        .to(room)
+        .emit("chat:room_users_online", {
+          room,
+          count: roomUsers ? roomUsers.size : 0,
+        });
+    }
+  });
+
+  // Leave an asteroid-specific chat room
+  socket.on("chat:leave_room", (room) => {
+    if (room && room !== "global") {
+      socket.leave(room);
+      console.log(`💬 ${socket.user.displayName} left room: ${room}`);
+      const roomUsers = chatNsp.adapter.rooms.get(room);
+      chatNsp
+        .to(room)
+        .emit("chat:room_users_online", {
+          room,
+          count: roomUsers ? roomUsers.size : 0,
+        });
+    }
+  });
+
+  // Handle incoming messages (supports room-based chat)
   socket.on("chat:send", async (data) => {
     try {
       const message = data?.message?.trim();
+      const room = data?.room || "global";
       if (!message || message.length > 500) return;
+
+      // Validate room
+      if (room !== "global" && !/^asteroid:[a-zA-Z0-9_-]+$/.test(room)) return;
 
       const chatMsg = await ChatMessage.create({
         user: socket.user.id,
         displayName: socket.user.displayName,
         message,
-        room: "global",
+        room,
       });
 
-      chatNsp.to("global").emit("chat:message", {
+      chatNsp.to(room).emit("chat:message", {
         _id: chatMsg._id,
         user: socket.user.id,
         displayName: socket.user.displayName,
         message: chatMsg.message,
+        room: chatMsg.room,
         createdAt: chatMsg.createdAt,
       });
     } catch (err) {
@@ -238,16 +274,20 @@ chatNsp.on("connection", (socket) => {
     }
   });
 
-  // Typing indicators
-  socket.on("chat:typing", () => {
-    socket.to("global").emit("chat:user_typing", {
+  // Typing indicators (supports room-based)
+  socket.on("chat:typing", (data) => {
+    const room = data?.room || "global";
+    socket.to(room).emit("chat:user_typing", {
       displayName: socket.user.displayName,
+      room,
     });
   });
 
-  socket.on("chat:stop_typing", () => {
-    socket.to("global").emit("chat:user_stop_typing", {
+  socket.on("chat:stop_typing", (data) => {
+    const room = data?.room || "global";
+    socket.to(room).emit("chat:user_stop_typing", {
       displayName: socket.user.displayName,
+      room,
     });
   });
 

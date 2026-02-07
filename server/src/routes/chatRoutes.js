@@ -9,9 +9,16 @@ const router = express.Router();
 // @access  Public
 router.get("/messages", async (req, res, next) => {
   try {
-    const { before, limit = 50 } = req.query;
+    const { before, limit = 50, room = "global" } = req.query;
 
-    const query = { room: "global" };
+    // Validate room name
+    if (room !== "global" && !/^asteroid:[a-zA-Z0-9_-]+$/.test(room)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid room name" });
+    }
+
+    const query = { room };
     if (before) {
       query.createdAt = { $lt: new Date(before) };
     }

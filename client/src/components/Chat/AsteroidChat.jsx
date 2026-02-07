@@ -2,12 +2,12 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MessageCircle,
-  X,
   Send,
-  Users,
   Loader2,
   ChevronDown,
+  ChevronUp,
   ArrowUp,
+  Users,
 } from "lucide-react";
 import useChatStore from "../../stores/chatStore";
 import useAuthStore from "../../stores/authStore";
@@ -21,50 +21,57 @@ const defaultRoomState = {
   usersOnline: 0,
 };
 
-const ChatSidebar = () => {
+const AsteroidChat = ({ asteroidId, asteroidName }) => {
+  const room = `asteroid:${asteroidId}`;
+
   const {
     isConnected,
-    isOpen,
-    toggleChat,
     sendMessage,
     emitTyping,
     emitStopTyping,
     loadHistory,
     loadOlderMessages,
+    joinRoom,
+    leaveRoom,
     connect,
-    disconnect,
   } = useChatStore();
 
-  const room = "global";
   const roomState =
     useChatStore((state) => state.rooms[room]) || defaultRoomState;
-  const {
-    messages,
-    usersOnline,
-    typingUsers,
-    hasMore,
-    isLoadingHistory,
-    unreadCount,
-  } = roomState;
+  const { messages, typingUsers, hasMore, isLoadingHistory, usersOnline } =
+    roomState;
 
   const { isAuthenticated, user } = useAuthStore();
   const [input, setInput] = useState("");
+  const [isExpanded, setIsExpanded] = useState(false);
   const [showScrollDown, setShowScrollDown] = useState(false);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
-  // Connect chat namespace based on auth
+  // Connect and load history on mount, leave on unmount
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && asteroidId) {
       connect();
       loadHistory(room);
     }
-  }, [isAuthenticated]);
+    return () => {
+      if (asteroidId) {
+        leaveRoom(room);
+      }
+    };
+  }, [isAuthenticated, asteroidId]);
+
+  // Join the room once the socket is actually connected
+  useEffect(() => {
+    if (isConnected && asteroidId) {
+      joinRoom(room);
+    }
+  }, [isConnected, asteroidId]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isExpanded) return;
     const container = messagesContainerRef.current;
     if (!container) return;
 
@@ -76,9 +83,8 @@ const ChatSidebar = () => {
     } else {
       setShowScrollDown(true);
     }
-  }, [messages, isOpen]);
+  }, [messages, isExpanded]);
 
-  // Scroll tracking
   const handleScroll = useCallback(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -88,11 +94,10 @@ const ChatSidebar = () => {
       120;
     setShowScrollDown(!isNearBottom);
 
-    // Load older when scrolled to top
     if (container.scrollTop < 40 && hasMore && !isLoadingHistory) {
       loadOlderMessages(room);
     }
-  }, [hasMore, isLoadingHistory]);
+  }, [hasMore, isLoadingHistory, room]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -128,68 +133,76 @@ const ChatSidebar = () => {
       .slice(0, 2);
   };
 
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated) {
+    return (
+      <div className="glass p-6 text-center">
+        <MessageCircle className="w-8 h-8 text-white/30 mx-auto mb-2" />
+        <p className="text-white/50 text-sm">
+          Log in to join the discussion about this asteroid.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <>
-      {/* Floating toggle button */}
-      <motion.button
-        onClick={toggleChat}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-accent-primary to-accent-secondary shadow-lg shadow-accent-primary/30 flex items-center justify-center hover:scale-105 transition-transform"
-        whileTap={{ scale: 0.92 }}
+    <motion.div
+      className="glass overflow-hidden"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      {/* Header - always visible */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/5 transition-colors"
       >
-        {isOpen ?
-          <X className="w-6 h-6 text-space-900" />
-        : <>
-            <MessageCircle className="w-6 h-6 text-space-900" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-risk-high rounded-full text-[10px] flex items-center justify-center font-bold text-white">
-                {unreadCount > 9 ? "9+" : unreadCount}
+        <div className="flex items-center gap-3">
+          <MessageCircle className="w-5 h-5 text-accent-primary" />
+          <div className="text-left">
+            <h3 className="text-base font-semibold text-white">Discussion</h3>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span
+                className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-400" : "bg-red-400"}`}
+              />
+              <span className="text-xs text-white/50">
+                {isConnected ?
+                  `${usersOnline || 0} in this discussion`
+                : "Connecting..."}
               </span>
-            )}
-          </>
-        }
-      </motion.button>
-
-      {/* Sidebar panel */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ x: 400, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 400, opacity: 0 }}
-            transition={{ type: "spring", damping: 26, stiffness: 300 }}
-            className="fixed top-0 right-0 z-40 h-full w-[360px] max-w-[90vw] flex flex-col bg-space-900/95 backdrop-blur-xl border-l border-white/10 shadow-2xl"
-          >
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0">
-              <div>
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <MessageCircle className="w-5 h-5 text-accent-primary" />
-                  Global Chat
-                </h3>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span
-                    className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-400" : "bg-red-400"}`}
-                  />
-                  <span className="text-xs text-white/50">
-                    {isConnected ? `${usersOnline} online` : "Connecting..."}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={toggleChat}
-                className="p-2 hover:bg-white/5 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-white/60" />
-              </button>
+              {messages.length > 0 && (
+                <span className="text-xs text-white/40">
+                  · {messages.length} messages
+                </span>
+              )}
             </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {!isExpanded && messages.length > 0 && (
+            <span className="px-2 py-0.5 bg-accent-primary/20 text-accent-primary text-xs rounded-full">
+              {messages.length}
+            </span>
+          )}
+          {isExpanded ?
+            <ChevronUp className="w-5 h-5 text-white/50" />
+          : <ChevronDown className="w-5 h-5 text-white/50" />}
+        </div>
+      </button>
 
+      {/* Expandable chat area */}
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="border-t border-white/10"
+          >
             {/* Messages area */}
             <div
               ref={messagesContainerRef}
               onScroll={handleScroll}
-              className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scroll-smooth"
+              className="h-80 overflow-y-auto px-4 py-3 space-y-3 scroll-smooth relative"
             >
               {/* Load more */}
               {isLoadingHistory && (
@@ -209,7 +222,11 @@ const ChatSidebar = () => {
 
               {messages.length === 0 && !isLoadingHistory && (
                 <div className="text-center text-white/30 text-sm py-12">
-                  No messages yet. Say hello!
+                  No messages yet. Start the discussion about{" "}
+                  <span className="text-accent-primary font-medium">
+                    {asteroidName || "this asteroid"}
+                  </span>
+                  !
                 </div>
               )}
 
@@ -263,17 +280,19 @@ const ChatSidebar = () => {
 
             {/* Scroll-to-bottom button */}
             {showScrollDown && (
-              <button
-                onClick={scrollToBottom}
-                className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-space-700 border border-white/10 rounded-full p-2 shadow-lg hover:bg-space-600 transition-colors"
-              >
-                <ChevronDown className="w-4 h-4 text-white/70" />
-              </button>
+              <div className="relative">
+                <button
+                  onClick={scrollToBottom}
+                  className="absolute -top-10 left-1/2 -translate-x-1/2 bg-space-700 border border-white/10 rounded-full p-2 shadow-lg hover:bg-space-600 transition-colors"
+                >
+                  <ChevronDown className="w-4 h-4 text-white/70" />
+                </button>
+              </div>
             )}
 
             {/* Typing indicator */}
             {typingUsers.length > 0 && (
-              <div className="px-5 py-1 text-xs text-white/40 shrink-0">
+              <div className="px-5 py-1 text-xs text-white/40">
                 {typingUsers.slice(0, 2).join(", ")}
                 {typingUsers.length > 2 ?
                   ` +${typingUsers.length - 2}`
@@ -285,7 +304,7 @@ const ChatSidebar = () => {
             {/* Input area */}
             <form
               onSubmit={handleSend}
-              className="px-4 py-3 border-t border-white/10 shrink-0"
+              className="px-4 py-3 border-t border-white/10"
             >
               <div className="flex items-center gap-2">
                 <input
@@ -293,7 +312,9 @@ const ChatSidebar = () => {
                   value={input}
                   onChange={handleInputChange}
                   placeholder={
-                    isConnected ? "Type a message..." : "Connecting..."
+                    isConnected ?
+                      `Discuss ${asteroidName || "this asteroid"}...`
+                    : "Connecting..."
                   }
                   disabled={!isConnected}
                   maxLength={500}
@@ -311,8 +332,8 @@ const ChatSidebar = () => {
           </motion.div>
         )}
       </AnimatePresence>
-    </>
+    </motion.div>
   );
 };
 
-export default ChatSidebar;
+export default AsteroidChat;
