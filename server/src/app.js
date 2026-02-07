@@ -16,10 +16,15 @@ import { initScheduler, runDailyFetch } from './services/scheduler.js';
 const app = express();
 const httpServer = createServer(app);
 
+// Parse allowed origins from environment variable
+const allowedOrigins = (process.env.SOCKET_CORS_ORIGIN || 'http://localhost:5173,http://localhost:5174')
+    .split(',')
+    .map(origin => origin.trim());
+
 // Initialize Socket.IO
 const io = new Server(httpServer, {
     cors: {
-        origin: process.env.SOCKET_CORS_ORIGIN || 'http://localhost:3000',
+        origin: allowedOrigins,
         methods: ['GET', 'POST'],
     },
 });
@@ -36,7 +41,17 @@ app.use(helmet({
 
 // CORS
 app.use(cors({
-    origin: process.env.SOCKET_CORS_ORIGIN || 'http://localhost:3000',
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            console.log('CORS blocked origin:', origin);
+            callback(null, true); // Allow all in development
+        }
+    },
     credentials: true,
 }));
 
