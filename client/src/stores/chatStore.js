@@ -2,7 +2,9 @@ import { create } from "zustand";
 import { io } from "socket.io-client";
 import api from "../services/api";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+const SOCKET_URL = (
+  import.meta.env.VITE_SOCKET_URL || "http://localhost:5000"
+).replace(/\/+$/, "");
 
 export const useChatStore = create((set, get) => ({
   // Per-room state: { [room]: { messages, hasMore, isLoadingHistory, typingUsers, unreadCount, usersOnline } }
@@ -80,6 +82,7 @@ export const useChatStore = create((set, get) => ({
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 2000,
+      withCredentials: true,
     });
 
     socket.on("connect", () => {

@@ -21,18 +21,23 @@ const httpServer = createServer(app);
 
 // Parse allowed origins from environment variable
 const allowedOrigins = (
+  process.env.CORS_ORIGIN ||
   process.env.SOCKET_CORS_ORIGIN ||
   "http://localhost:5173,http://localhost:5174,http://localhost:3001,http://localhost:3000"
 )
   .split(",")
   .map((origin) => origin.trim());
 
+const isProduction = process.env.NODE_ENV === "production";
+
 // Initialize Socket.IO
 const io = new Server(httpServer, {
   cors: {
-    origin: allowedOrigins,
+    origin: isProduction ? allowedOrigins : "*",
     methods: ["GET", "POST"],
+    credentials: true,
   },
+  transports: ["polling", "websocket"],
 });
 
 // Make io accessible to routes
@@ -40,23 +45,33 @@ app.set("io", io);
 
 // ========== MIDDLEWARE ==========
 
-// CORS
+// CORS — production: whitelist only; development: allow all
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
+      // Allow requests with no origin (mobile apps, curl, server-to-server)
       if (!origin) return callback(null, true);
 
-      if (allowedOrigins.indexOf(origin) !== -1) {
+      if (!isProduction) {
+        // Allow everything in development
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.log("CORS blocked origin:", origin);
-        callback(null, true); // Allow all in development
+        console.warn("CORS blocked origin:", origin);
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
       }
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
+
+// Handle preflight across all routes
+app.options("*", cors());
 
 // Body parsing
 app.use(express.json({ limit: "10kb" }));
@@ -219,12 +234,10 @@ chatNsp.on("connection", (socket) => {
       console.log(`💬 ${socket.user.displayName} joined room: ${room}`);
       // Notify room members
       const roomUsers = chatNsp.adapter.rooms.get(room);
-      chatNsp
-        .to(room)
-        .emit("chat:room_users_online", {
-          room,
-          count: roomUsers ? roomUsers.size : 0,
-        });
+      chatNsp.to(room).emit("chat:room_users_online", {
+        room,
+        count: roomUsers ? roomUsers.size : 0,
+      });
     }
   });
 
@@ -234,12 +247,10 @@ chatNsp.on("connection", (socket) => {
       socket.leave(room);
       console.log(`💬 ${socket.user.displayName} left room: ${room}`);
       const roomUsers = chatNsp.adapter.rooms.get(room);
-      chatNsp
-        .to(room)
-        .emit("chat:room_users_online", {
-          room,
-          count: roomUsers ? roomUsers.size : 0,
-        });
+      chatNsp.to(room).emit("chat:room_users_online", {
+        room,
+        count: roomUsers ? roomUsers.size : 0,
+      });
     }
   });
 
@@ -307,8 +318,8 @@ const startServer = async () => {
     // Connect to MongoDB
     await connectDB();
 
-    // Start HTTP server
-    httpServer.listen(PORT, () => {
+    // Start HTTP server — bind to 0.0.0.0 so cloud hosts (Render) can reach it
+    httpServer.listen(PORT, "0.0.0.0", () => {
       console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
