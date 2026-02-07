@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7
+    container_name: astral-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: astral_admin
+      MONGO_INITDB_ROOT_PASSWORD: astral_secret_2024
+      MONGO_INITDB_DATABASE: astral_neo
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - astral-network
+
+  # Mongo Express - Web UI for MongoDB (Dev only)
+  mongo-express:
+    image: mongo-express:latest
+    container_name: astral-mongo-express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: astral_admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: astral_secret_2024
+      ME_CONFIG_MONGODB_URL: mongodb://astral_admin:astral_secret_2024@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin123
+    depends_on:
+      - mongodb
+    networks:
+      - astral-network
+
+  # Backend API (will be added in Phase 2)
+  # backend:
+  #   build: ./server
+  #   container_name: astral-backend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     - NODE_ENV=development
+  #     - MONGODB_URI=mongodb://astral_admin:astral_secret_2024@mongodb:27017/astral_neo?authSource=admin
+  #   depends_on:
+  #     - mongodb
+  #   networks:
+  #     - astral-network
+
+  # Frontend (will be added in Phase 3)
+  # frontend:
+  #   build: ./client
+  #   container_name: astral-frontend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - astral-network
+
+networks:
+  astral-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  mongodb_config:
