@@ -19,6 +19,7 @@ import useAsteroidStore from "../stores/asteroidStore";
 import Earth3D from "../components/Visualization/Earth3D";
 import TimeControls from "../components/Visualization/TimeControls";
 import AsteroidInfoPanel from "../components/Visualization/AsteroidInfoPanel";
+import SunClock from "../components/Visualization/SunClock";
 
 const Visualization = () => {
   const navigate = useNavigate();
@@ -37,6 +38,12 @@ const Visualization = () => {
   const [selectedAsteroid, setSelectedAsteroid] = useState(null);
   const [hoveredAsteroid, setHoveredAsteroid] = useState(null);
   const [useFreeCamera, setUseFreeCamera] = useState(true);
+
+  // Sun clock
+  const [sunHourAngle, setSunHourAngle] = useState(() => {
+    const now = new Date();
+    return now.getUTCHours() + now.getUTCMinutes() / 60;
+  });
 
   // Time controls
   const [timeOffset, setTimeOffset] = useState(0); // hours from now
@@ -166,6 +173,7 @@ const Visualization = () => {
             onSelectAsteroid={handleSelectAsteroid}
             onHoverAsteroid={setHoveredAsteroid}
             useFreeCamera={useFreeCamera}
+            sunHourAngle={sunHourAngle}
           />
         </Suspense>
 
@@ -275,6 +283,11 @@ const Visualization = () => {
           onClose={handleDeselectAsteroid}
           onNavigate={handleNavigateToDetail}
         />
+
+        {/* ─── Sun Clock (bottom-right, above time controls) ─ */}
+        <div className="absolute bottom-44 right-4 z-10">
+          <SunClock sunHour={sunHourAngle} onSunHourChange={setSunHourAngle} />
+        </div>
 
         {/* ─── Asteroid List Sidebar ─────────────────────── */}
         <AnimatePresence>

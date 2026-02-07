@@ -19,18 +19,15 @@ const EARTH_CLOUDS_URL = TEX_BASE + "earth_clouds_1024.png";
 
 const earthVertexShader = `
     varying vec2 vUv;
-    varying vec3 vNormal;
+    varying vec3 vWorldNormal;
     varying vec3 vWorldPosition;
-    varying float vDotNL;
-
-    uniform vec3 sunDirection;
 
     void main() {
         vUv = uv;
-        vNormal = normalize(normalMatrix * normal);
+        // Transform normal to world space (not view space)
+        vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
         vec4 worldPos = modelMatrix * vec4(position, 1.0);
         vWorldPosition = worldPos.xyz;
-        vDotNL = dot(vNormal, normalize(sunDirection));
         gl_Position = projectionMatrix * viewMatrix * worldPos;
     }
 `;
@@ -43,25 +40,27 @@ const earthFragmentShader = `
     uniform float time;
 
     varying vec2 vUv;
-    varying vec3 vNormal;
+    varying vec3 vWorldNormal;
     varying vec3 vWorldPosition;
-    varying float vDotNL;
 
     void main() {
         vec4 dayColor = texture2D(dayTexture, vUv);
         vec4 nightColor = texture2D(nightTexture, vUv);
         float specMask = texture2D(specularMap, vUv).r;
 
+        vec3 N = normalize(vWorldNormal);
         vec3 sunDir = normalize(sunDirection);
-        float sunDot = dot(vNormal, sunDir);
 
-        // Day/night with smooth terminator
+        // Dot product: positive = facing sun (day), negative = away (night)
+        float sunDot = dot(N, sunDir);
+
+        // Smooth day/night terminator band
         float dayFactor = smoothstep(-0.15, 0.25, sunDot);
 
         // Specular on oceans (specular map: bright = water)
         vec3 viewDir = normalize(cameraPosition - vWorldPosition);
         vec3 halfDir = normalize(sunDir + viewDir);
-        float spec = pow(max(dot(vNormal, halfDir), 0.0), 64.0) * specMask;
+        float spec = pow(max(dot(N, halfDir), 0.0), 64.0) * specMask;
         vec3 specular = spec * vec3(0.5, 0.6, 0.7) * dayFactor;
 
         // Night light twinkle
@@ -72,7 +71,7 @@ const earthFragmentShader = `
         vec3 color = mix(night, dayColor.rgb, dayFactor) + specular;
 
         // Soft atmospheric rim glow
-        float rim = 1.0 - max(dot(vNormal, viewDir), 0.0);
+        float rim = 1.0 - max(dot(N, viewDir), 0.0);
         float rimGlow = pow(rim, 3.0);
         vec3 rimColor = vec3(0.3, 0.6, 1.0) * rimGlow * 0.35;
         color += rimColor;
@@ -81,7 +80,7 @@ const earthFragmentShader = `
     }
 `;
 
-const Earth = () => {
+const Earth = ({ sunHourAngle = null }) => {
   const earthRef = useRef();
   const cloudsRef = useRef();
 
@@ -116,24 +115,35 @@ const Earth = () => {
     });
   }, [dayTexture, nightTexture, normalTexture, specularTexture, cloudsTexture]);
 
-  const sunDirection = useMemo(
-    () => new THREE.Vector3(5, 2, 3).normalize(),
-    [],
-  );
+  // Compute sun direction from hour angle (sun rotates 360° per 24h)
+  // sunHourAngle = null → use current real time
+  const sunDirectionRef = useRef(new THREE.Vector3(5, 2, 3).normalize());
 
   const earthUniforms = useMemo(
     () => ({
       dayTexture: { value: dayTexture },
       nightTexture: { value: nightTexture },
       specularMap: { value: specularTexture },
-      sunDirection: { value: sunDirection },
+      sunDirection: { value: sunDirectionRef.current },
       time: { value: 0 },
     }),
-    [dayTexture, nightTexture, specularTexture, sunDirection],
+    [dayTexture, nightTexture, specularTexture],
   );
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
+
+    // Determine current hour for sun position
+    const now = new Date();
+    const realHour = now.getUTCHours() + now.getUTCMinutes() / 60;
+    const hour = sunHourAngle !== null ? sunHourAngle : realHour;
+
+    // Sun angle: 12:00 UTC = sun facing camera (positive Z), rotates full circle over 24h
+    // At hour 0 (midnight UTC), sun is behind the Earth; at 12, it faces front
+    const sunAngle = ((hour - 12) / 24) * Math.PI * 2;
+    sunDirectionRef.current
+      .set(Math.sin(sunAngle) * 5, 1.5, Math.cos(sunAngle) * 5)
+      .normalize();
 
     if (earthRef.current) {
       earthRef.current.rotation.y = t * 0.04;
@@ -219,10 +229,26 @@ const ReferenceRing = ({
 };
 
 // ─── Sun light flare ─────────────────────────────────────────────────
-const SunLight = () => {
+const SunLight = ({ sunHourAngle = null }) => {
+  const dirLightRef = useRef();
+
+  useFrame(() => {
+    if (!dirLightRef.current) return;
+    const now = new Date();
+    const realHour = now.getUTCHours() + now.getUTCMinutes() / 60;
+    const hour = sunHourAngle !== null ? sunHourAngle : realHour;
+    const sunAngle = ((hour - 12) / 24) * Math.PI * 2;
+    dirLightRef.current.position.set(
+      Math.sin(sunAngle) * 50,
+      20,
+      Math.cos(sunAngle) * 50,
+    );
+  });
+
   return (
     <group>
       <directionalLight
+        ref={dirLightRef}
         position={[50, 20, 30]}
         intensity={2.0}
         color="#fff5e6"
@@ -250,11 +276,12 @@ const Scene = ({
   onSelectAsteroid,
   onHoverAsteroid,
   useFreeCamera = false,
+  sunHourAngle = null,
 }) => {
   return (
     <>
       {/* Lighting */}
-      <SunLight />
+      <SunLight sunHourAngle={sunHourAngle} />
 
       {/* Stars */}
       <Stars
@@ -269,7 +296,7 @@ const Scene = ({
 
       {/* Earth — wrapped in Suspense for texture loading */}
       <Suspense fallback={null}>
-        <Earth />
+        <Earth sunHourAngle={sunHourAngle} />
       </Suspense>
 
       {/* Reference distance rings */}
@@ -328,6 +355,7 @@ const Earth3D = ({
   onSelectAsteroid,
   onHoverAsteroid,
   useFreeCamera = false,
+  sunHourAngle = null,
 }) => {
   return (
     <div className={`relative ${className}`}>
@@ -352,6 +380,7 @@ const Earth3D = ({
           onSelectAsteroid={onSelectAsteroid}
           onHoverAsteroid={onHoverAsteroid}
           useFreeCamera={useFreeCamera}
+          sunHourAngle={sunHourAngle}
         />
       </Canvas>
     </div>
