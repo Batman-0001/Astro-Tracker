@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Search,
   Sparkles,
+  Orbit,
 } from "lucide-react";
 import useAsteroidStore from "../stores/asteroidStore";
 import StatCard from "../components/Dashboard/StatCard";
@@ -164,6 +165,7 @@ const Dashboard = () => {
                   <Earth3D
                     asteroids={todayAsteroids}
                     className="w-full h-full rounded-2xl overflow-hidden"
+                    useFreeCamera={true}
                   />
                 </Suspense>
               : <div className="w-full h-full glass rounded-2xl flex items-center justify-center">
@@ -350,11 +352,20 @@ const Dashboard = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <div className="flex items-center gap-3 mb-4">
-                <AlertTriangle className="w-6 h-6 text-risk-high" />
-                <h3 className="text-xl font-bold text-risk-high">
-                  High Risk Objects
-                </h3>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-6 h-6 text-risk-high" />
+                  <h3 className="text-xl font-bold text-risk-high">
+                    High Risk Objects
+                  </h3>
+                </div>
+                <Link
+                  to="/visualization"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent-primary/10 border border-accent-primary/20 text-accent-primary text-sm font-medium hover:bg-accent-primary/20 transition-all"
+                >
+                  <Orbit className="w-4 h-4" />
+                  View All in 3D
+                </Link>
               </div>
               <p className="text-white/50 mb-4">
                 These asteroids require close monitoring due to their size,

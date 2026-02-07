@@ -1,277 +1,361 @@
-import { useRef, useMemo } from 'react';
-import { Canvas, useFrame, useLoader } from '@react-three/fiber';
-import { OrbitControls, Stars, Sphere } from '@react-three/drei';
-import * as THREE from 'three';
+import { useRef, useMemo, useCallback, Suspense } from "react";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
+import { OrbitControls, Stars } from "@react-three/drei";
+import * as THREE from "three";
+import Atmosphere from "./Atmosphere";
+import AsteroidOrbit from "./AsteroidOrbit";
+import CameraController from "./CameraController";
 
-// Earth component with atmosphere
+// ─── Real Earth Texture URLs (Three.js / NASA Blue Marble) ──────────
+const TEX_BASE =
+  "https://cdn.jsdelivr.net/gh/mrdoob/three.js@r161/examples/textures/planets/";
+const EARTH_DAY_URL = TEX_BASE + "earth_atmos_2048.jpg";
+const EARTH_NIGHT_URL = TEX_BASE + "earth_lights_2048.png";
+const EARTH_NORMAL_URL = TEX_BASE + "earth_normal_2048.jpg";
+const EARTH_SPECULAR_URL = TEX_BASE + "earth_specular_2048.jpg";
+const EARTH_CLOUDS_URL = TEX_BASE + "earth_clouds_1024.png";
+
+// ─── Earth with day/night shader ─────────────────────────────────────
+
+const earthVertexShader = `
+    varying vec2 vUv;
+    varying vec3 vNormal;
+    varying vec3 vWorldPosition;
+    varying float vDotNL;
+
+    uniform vec3 sunDirection;
+
+    void main() {
+        vUv = uv;
+        vNormal = normalize(normalMatrix * normal);
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPos.xyz;
+        vDotNL = dot(vNormal, normalize(sunDirection));
+        gl_Position = projectionMatrix * viewMatrix * worldPos;
+    }
+`;
+
+const earthFragmentShader = `
+    uniform sampler2D dayTexture;
+    uniform sampler2D nightTexture;
+    uniform sampler2D specularMap;
+    uniform vec3 sunDirection;
+    uniform float time;
+
+    varying vec2 vUv;
+    varying vec3 vNormal;
+    varying vec3 vWorldPosition;
+    varying float vDotNL;
+
+    void main() {
+        vec4 dayColor = texture2D(dayTexture, vUv);
+        vec4 nightColor = texture2D(nightTexture, vUv);
+        float specMask = texture2D(specularMap, vUv).r;
+
+        vec3 sunDir = normalize(sunDirection);
+        float sunDot = dot(vNormal, sunDir);
+
+        // Day/night with smooth terminator
+        float dayFactor = smoothstep(-0.15, 0.25, sunDot);
+
+        // Specular on oceans (specular map: bright = water)
+        vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+        vec3 halfDir = normalize(sunDir + viewDir);
+        float spec = pow(max(dot(vNormal, halfDir), 0.0), 64.0) * specMask;
+        vec3 specular = spec * vec3(0.5, 0.6, 0.7) * dayFactor;
+
+        // Night light twinkle
+        float twinkle = 0.92 + 0.08 * sin(time * 1.5 + vUv.x * 100.0 + vUv.y * 60.0);
+        vec3 night = nightColor.rgb * twinkle * 1.6;
+
+        // Mix day & night
+        vec3 color = mix(night, dayColor.rgb, dayFactor) + specular;
+
+        // Soft atmospheric rim glow
+        float rim = 1.0 - max(dot(vNormal, viewDir), 0.0);
+        float rimGlow = pow(rim, 3.0);
+        vec3 rimColor = vec3(0.3, 0.6, 1.0) * rimGlow * 0.35;
+        color += rimColor;
+
+        gl_FragColor = vec4(color, 1.0);
+    }
+`;
+
 const Earth = () => {
-    const earthRef = useRef();
-    const cloudsRef = useRef();
-    const atmosphereRef = useRef();
+  const earthRef = useRef();
+  const cloudsRef = useRef();
 
-    // Create textures programmatically (since we don't have actual textures)
-    const earthTexture = useMemo(() => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 256;
-        const ctx = canvas.getContext('2d');
+  // Load real NASA satellite textures
+  const [
+    dayTexture,
+    nightTexture,
+    normalTexture,
+    specularTexture,
+    cloudsTexture,
+  ] = useLoader(THREE.TextureLoader, [
+    EARTH_DAY_URL,
+    EARTH_NIGHT_URL,
+    EARTH_NORMAL_URL,
+    EARTH_SPECULAR_URL,
+    EARTH_CLOUDS_URL,
+  ]);
 
-        // Ocean base
-        const gradient = ctx.createLinearGradient(0, 0, 0, 256);
-        gradient.addColorStop(0, '#1a365d');
-        gradient.addColorStop(0.3, '#2563eb');
-        gradient.addColorStop(0.7, '#1d4ed8');
-        gradient.addColorStop(1, '#1e3a5f');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 512, 256);
-
-        // Add some land masses (simplified)
-        ctx.fillStyle = '#166534';
-        // North America
-        ctx.beginPath();
-        ctx.ellipse(100, 80, 50, 40, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // South America
-        ctx.beginPath();
-        ctx.ellipse(130, 160, 25, 50, 0.3, 0, Math.PI * 2);
-        ctx.fill();
-        // Europe/Africa
-        ctx.beginPath();
-        ctx.ellipse(270, 100, 30, 60, 0.1, 0, Math.PI * 2);
-        ctx.fill();
-        // Asia
-        ctx.beginPath();
-        ctx.ellipse(380, 80, 70, 50, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Australia
-        ctx.beginPath();
-        ctx.ellipse(430, 170, 25, 20, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Ice caps
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, 512, 15);
-        ctx.fillRect(0, 241, 512, 15);
-
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        return texture;
-    }, []);
-
-    // Clouds texture
-    const cloudsTexture = useMemo(() => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 256;
-        const ctx = canvas.getContext('2d');
-
-        ctx.fillStyle = 'rgba(0, 0, 0, 0)';
-        ctx.fillRect(0, 0, 512, 256);
-
-        // Random cloud patches
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-        for (let i = 0; i < 50; i++) {
-            const x = Math.random() * 512;
-            const y = Math.random() * 256;
-            const r = Math.random() * 30 + 10;
-            ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        return texture;
-    }, []);
-
-    useFrame(({ clock }) => {
-        const elapsed = clock.getElapsedTime();
-
-        if (earthRef.current) {
-            earthRef.current.rotation.y = elapsed * 0.05;
-        }
-        if (cloudsRef.current) {
-            cloudsRef.current.rotation.y = elapsed * 0.06;
-        }
-        if (atmosphereRef.current) {
-            atmosphereRef.current.rotation.y = elapsed * 0.03;
-        }
+  // Configure textures
+  useMemo(() => {
+    [
+      dayTexture,
+      nightTexture,
+      normalTexture,
+      specularTexture,
+      cloudsTexture,
+    ].forEach((t) => {
+      if (t) {
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = 8;
+      }
     });
+  }, [dayTexture, nightTexture, normalTexture, specularTexture, cloudsTexture]);
 
-    return (
-        <group>
-            {/* Earth */}
-            <mesh ref={earthRef}>
-                <sphereGeometry args={[2, 64, 64]} />
-                <meshStandardMaterial
-                    map={earthTexture}
-                    roughness={0.8}
-                    metalness={0.1}
-                />
-            </mesh>
+  const sunDirection = useMemo(
+    () => new THREE.Vector3(5, 2, 3).normalize(),
+    [],
+  );
 
-            {/* Clouds */}
-            <mesh ref={cloudsRef}>
-                <sphereGeometry args={[2.02, 64, 64]} />
-                <meshStandardMaterial
-                    map={cloudsTexture}
-                    transparent
-                    opacity={0.4}
-                    depthWrite={false}
-                />
-            </mesh>
+  const earthUniforms = useMemo(
+    () => ({
+      dayTexture: { value: dayTexture },
+      nightTexture: { value: nightTexture },
+      specularMap: { value: specularTexture },
+      sunDirection: { value: sunDirection },
+      time: { value: 0 },
+    }),
+    [dayTexture, nightTexture, specularTexture, sunDirection],
+  );
 
-            {/* Atmosphere glow */}
-            <mesh ref={atmosphereRef} scale={1.15}>
-                <sphereGeometry args={[2, 64, 64]} />
-                <shaderMaterial
-                    transparent
-                    side={THREE.BackSide}
-                    uniforms={{
-                        glowColor: { value: new THREE.Color('#00d4ff') },
-                    }}
-                    vertexShader={`
-                        varying vec3 vNormal;
-                        void main() {
-                            vNormal = normalize(normalMatrix * normal);
-                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                        }
-                    `}
-                    fragmentShader={`
-                        uniform vec3 glowColor;
-                        varying vec3 vNormal;
-                        void main() {
-                            float intensity = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
-                            gl_FragColor = vec4(glowColor, intensity * 0.5);
-                        }
-                    `}
-                />
-            </mesh>
-        </group>
-    );
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+
+    if (earthRef.current) {
+      earthRef.current.rotation.y = t * 0.04;
+      earthRef.current.material.uniforms.time.value = t;
+    }
+    if (cloudsRef.current) {
+      cloudsRef.current.rotation.y = t * 0.05;
+    }
+  });
+
+  return (
+    <group>
+      {/* Earth with day/night shader */}
+      <mesh ref={earthRef}>
+        <sphereGeometry args={[2, 128, 64]} />
+        <shaderMaterial
+          uniforms={earthUniforms}
+          vertexShader={earthVertexShader}
+          fragmentShader={earthFragmentShader}
+        />
+      </mesh>
+
+      {/* Cloud layer */}
+      <mesh ref={cloudsRef}>
+        <sphereGeometry args={[2.025, 64, 64]} />
+        <meshStandardMaterial
+          map={cloudsTexture}
+          transparent
+          opacity={0.35}
+          depthWrite={false}
+          blending={THREE.NormalBlending}
+        />
+      </mesh>
+
+      {/* Atmosphere glow — softer, realistic blue */}
+      <Atmosphere radius={2} color="#4da6ff" intensity={0.8} falloff={3.5} />
+
+      {/* Inner haze */}
+      <Atmosphere radius={2} color="#88ccff" intensity={0.3} falloff={5.0} />
+    </group>
+  );
 };
 
-// Asteroid visualization
-const AsteroidMarker = ({ position, size = 0.1, color = '#ef4444', name }) => {
-    const meshRef = useRef();
+// ─── Reference grid rings ────────────────────────────────────────────
+const ReferenceRing = ({
+  radius,
+  color = "#ffffff",
+  opacity = 0.08,
+  dashed = false,
+}) => {
+  const points = useMemo(() => {
+    const pts = [];
+    const segments = 128;
+    for (let i = 0; i <= segments; i++) {
+      const theta = (i / segments) * Math.PI * 2;
+      pts.push(
+        new THREE.Vector3(
+          Math.cos(theta) * radius,
+          0,
+          Math.sin(theta) * radius,
+        ),
+      );
+    }
+    return pts;
+  }, [radius]);
 
-    useFrame(({ clock }) => {
-        if (meshRef.current) {
-            meshRef.current.rotation.x = clock.getElapsedTime() * 2;
-            meshRef.current.rotation.y = clock.getElapsedTime() * 1.5;
-        }
-    });
+  const geometry = useMemo(
+    () => new THREE.BufferGeometry().setFromPoints(points),
+    [points],
+  );
 
-    return (
-        <mesh ref={meshRef} position={position}>
-            <dodecahedronGeometry args={[size, 0]} />
-            <meshStandardMaterial
-                color={color}
-                emissive={color}
-                emissiveIntensity={0.5}
-                roughness={0.3}
-            />
-        </mesh>
-    );
+  return (
+    <line geometry={geometry}>
+      <lineDashedMaterial
+        color={color}
+        transparent
+        opacity={opacity}
+        dashSize={dashed ? 0.3 : 100}
+        gapSize={dashed ? 0.15 : 0}
+      />
+    </line>
+  );
 };
 
-// Orbit ring
-const OrbitRing = ({ radius, color = '#ffffff', opacity = 0.2 }) => {
-    return (
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[radius - 0.02, radius + 0.02, 64]} />
-            <meshBasicMaterial
-                color={color}
-                transparent
-                opacity={opacity}
-                side={THREE.DoubleSide}
-            />
-        </mesh>
-    );
+// ─── Sun light flare ─────────────────────────────────────────────────
+const SunLight = () => {
+  return (
+    <group>
+      <directionalLight
+        position={[50, 20, 30]}
+        intensity={2.0}
+        color="#fff5e6"
+        castShadow={false}
+      />
+      {/* Fill light for dark side visibility */}
+      <ambientLight intensity={0.08} color="#1a1a3a" />
+      {/* Subtle back-rim light */}
+      <pointLight
+        position={[-20, -10, -15]}
+        intensity={0.3}
+        color="#4444aa"
+        distance={60}
+      />
+    </group>
+  );
 };
 
-// Main Scene
-const Scene = ({ asteroids = [] }) => {
-    return (
-        <>
-            {/* Lighting */}
-            <ambientLight intensity={0.3} />
-            <directionalLight position={[5, 3, 5]} intensity={1.5} />
-            <pointLight position={[-5, -3, -5]} intensity={0.5} color="#ffd700" />
+// ─── Main Scene ──────────────────────────────────────────────────────
+const Scene = ({
+  asteroids = [],
+  timeOffset = 0,
+  selectedAsteroid = null,
+  hoveredAsteroid = null,
+  onSelectAsteroid,
+  onHoverAsteroid,
+  useFreeCamera = false,
+}) => {
+  return (
+    <>
+      {/* Lighting */}
+      <SunLight />
 
-            {/* Stars background */}
-            <Stars
-                radius={100}
-                depth={50}
-                count={5000}
-                factor={4}
-                saturation={0}
-                fade
-                speed={1}
-            />
+      {/* Stars */}
+      <Stars
+        radius={200}
+        depth={80}
+        count={8000}
+        factor={5}
+        saturation={0.1}
+        fade
+        speed={0.5}
+      />
 
-            {/* Earth */}
-            <Earth />
+      {/* Earth — wrapped in Suspense for texture loading */}
+      <Suspense fallback={null}>
+        <Earth />
+      </Suspense>
 
-            {/* Orbit rings */}
-            <OrbitRing radius={3} color="#00d4ff" opacity={0.1} />
-            <OrbitRing radius={4} color="#6366f1" opacity={0.1} />
-            <OrbitRing radius={5} color="#f59e0b" opacity={0.1} />
+      {/* Reference distance rings */}
+      <ReferenceRing radius={3.5} color="#00d4ff" opacity={0.06} />
+      <ReferenceRing radius={5} color="#6366f1" opacity={0.04} dashed />
+      <ReferenceRing radius={7} color="#6366f1" opacity={0.03} dashed />
 
-            {/* Asteroid markers (sample positions) */}
-            {asteroids.slice(0, 10).map((asteroid, i) => {
-                const angle = (i / 10) * Math.PI * 2;
-                const distance = 3 + (asteroid.missDistanceLunar || 1) * 0.5;
-                const x = Math.cos(angle) * distance;
-                const z = Math.sin(angle) * distance;
-                const y = (Math.random() - 0.5) * 0.5;
+      {/* Asteroid orbits */}
+      {asteroids.slice(0, 20).map((asteroid) => (
+        <AsteroidOrbit
+          key={asteroid.neo_reference_id || asteroid._id}
+          asteroid={asteroid}
+          timeOffset={timeOffset}
+          selected={
+            selectedAsteroid?.neo_reference_id === asteroid.neo_reference_id
+          }
+          hovered={
+            hoveredAsteroid?.neo_reference_id === asteroid.neo_reference_id
+          }
+          onSelect={onSelectAsteroid}
+          onHover={onHoverAsteroid}
+          showOrbit={true}
+          showLabel={asteroid.isPotentiallyHazardous}
+        />
+      ))}
 
-                const color = asteroid.riskCategory === 'high' ? '#ef4444' :
-                    asteroid.riskCategory === 'moderate' ? '#f59e0b' :
-                        asteroid.riskCategory === 'low' ? '#eab308' : '#22c55e';
-
-                return (
-                    <AsteroidMarker
-                        key={asteroid.neo_reference_id || i}
-                        position={[x, y, z]}
-                        size={0.05 + (asteroid.estimatedDiameterMax || 100) / 5000}
-                        color={color}
-                        name={asteroid.name}
-                    />
-                );
-            })}
-
-            {/* Camera controls */}
-            <OrbitControls
-                enableZoom={true}
-                enablePan={false}
-                minDistance={4}
-                maxDistance={15}
-                autoRotate
-                autoRotateSpeed={0.5}
-            />
-        </>
-    );
+      {/* Camera */}
+      {useFreeCamera ?
+        <OrbitControls
+          enableZoom
+          enablePan={false}
+          minDistance={3.5}
+          maxDistance={25}
+          autoRotate={!selectedAsteroid}
+          autoRotateSpeed={0.3}
+          enableDamping
+          dampingFactor={0.05}
+        />
+      : <CameraController
+          targetAsteroid={selectedAsteroid}
+          timeOffset={timeOffset}
+          enabled={true}
+        />
+      }
+    </>
+  );
 };
 
-// Main component
-const Earth3D = ({ asteroids = [], className = '' }) => {
-    return (
-        <div className={`relative ${className}`}>
-            <Canvas
-                camera={{ position: [0, 2, 6], fov: 45 }}
-                gl={{ antialias: true, alpha: true }}
-                style={{ background: 'transparent' }}
-            >
-                <Scene asteroids={asteroids} />
-            </Canvas>
-
-            {/* Overlay info */}
-            <div className="absolute bottom-4 left-4 glass px-4 py-2 text-sm">
-                <p className="text-white/70">🌍 Drag to rotate • Scroll to zoom</p>
-            </div>
-        </div>
-    );
+// ─── Main exported component ─────────────────────────────────────────
+const Earth3D = ({
+  asteroids = [],
+  className = "",
+  timeOffset = 0,
+  selectedAsteroid = null,
+  hoveredAsteroid = null,
+  onSelectAsteroid,
+  onHoverAsteroid,
+  useFreeCamera = false,
+}) => {
+  return (
+    <div className={`relative ${className}`}>
+      <Canvas
+        camera={{ position: [0, 3, 9], fov: 45 }}
+        gl={{
+          antialias: true,
+          alpha: true,
+          powerPreference: "high-performance",
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.2,
+        }}
+        style={{ background: "transparent" }}
+        dpr={[1, 2]}
+        onPointerMissed={() => onSelectAsteroid?.(null)}
+      >
+        <Scene
+          asteroids={asteroids}
+          timeOffset={timeOffset}
+          selectedAsteroid={selectedAsteroid}
+          hoveredAsteroid={hoveredAsteroid}
+          onSelectAsteroid={onSelectAsteroid}
+          onHoverAsteroid={onHoverAsteroid}
+          useFreeCamera={useFreeCamera}
+        />
+      </Canvas>
+    </div>
+  );
 };
 
 export default Earth3D;
