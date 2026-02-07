@@ -54,8 +54,8 @@ const earthFragmentShader = `
         // Dot product: positive = facing sun (day), negative = away (night)
         float sunDot = dot(N, sunDir);
 
-        // Smooth day/night terminator band
-        float dayFactor = smoothstep(-0.15, 0.25, sunDot);
+        // Smooth day/night terminator band - adjusted for brighter dayside
+        float dayFactor = smoothstep(-0.25, 0.15, sunDot);
 
         // Specular on oceans (specular map: bright = water)
         vec3 viewDir = normalize(cameraPosition - vWorldPosition);
@@ -67,8 +67,11 @@ const earthFragmentShader = `
         float twinkle = 0.92 + 0.08 * sin(time * 1.5 + vUv.x * 100.0 + vUv.y * 60.0);
         vec3 night = nightColor.rgb * twinkle * 1.6;
 
+        // Brighten dayside for better visibility
+        vec3 brightDay = dayColor.rgb * 1.35;
+
         // Mix day & night
-        vec3 color = mix(night, dayColor.rgb, dayFactor) + specular;
+        vec3 color = mix(night, brightDay, dayFactor) + specular;
 
         // Soft atmospheric rim glow
         float rim = 1.0 - max(dot(N, viewDir), 0.0);
@@ -279,8 +282,8 @@ const SunLight = ({ sunHourAngle = null }) => {
         color="#fff5e6"
         castShadow={false}
       />
-      {/* Fill light for dark side visibility */}
-      <ambientLight intensity={0.08} color="#1a1a3a" />
+      {/* Fill light for dark side visibility - increased for better nightside visibility */}
+      <ambientLight intensity={0.25} color="#2a3a5a" />
       {/* Subtle back-rim light */}
       <pointLight
         position={[-20, -10, -15]}
@@ -398,7 +401,7 @@ const Earth3D = ({
           alpha: true,
           powerPreference: "high-performance",
           toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.2,
+          toneMappingExposure: 1.5,
           logarithmicDepthBuffer: true,
         }}
         style={{ background: "transparent" }}
