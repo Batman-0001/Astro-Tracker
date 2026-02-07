@@ -13,6 +13,7 @@ import Alerts from "./pages/Alerts";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Visualization from "./pages/Visualization";
+import ImpactVisualizer from "./pages/ImpactVisualizer";
 import NotFound from "./pages/NotFound";
 import LoadingScreen from "./components/Common/LoadingScreen";
 import ErrorBoundary from "./components/Common/ErrorBoundary";
@@ -152,6 +153,7 @@ function App() {
                   }
                 />
                 <Route path="/visualization" element={<Visualization />} />
+                <Route path="/impact" element={<ImpactVisualizer />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AnimatePresence>
