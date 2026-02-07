@@ -1,8 +1,11 @@
 import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import React from 'react';
 
 const StatCard = ({
-    icon,
+    icon: Icon,
+    iconColor = 'text-accent-primary',
+    bgColor = 'bg-accent-primary/20',
     label,
     value,
     subValue,
@@ -17,6 +20,12 @@ const StatCard = ({
         return <Minus className="w-4 h-4 text-white/50" />;
     };
 
+    // Check if Icon is a valid React component (function or forwardRef)
+    const isReactComponent = Icon && (
+        typeof Icon === 'function' ||
+        (typeof Icon === 'object' && Icon.$$typeof)
+    );
+
     return (
         <motion.div
             className="stat-card group hover:border-accent-primary/30 transition-all duration-300"
@@ -27,20 +36,21 @@ const StatCard = ({
         >
             <div className="flex items-start justify-between">
                 <div
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl`}
-                    style={{
-                        background: `linear-gradient(135deg, var(--tw-gradient-from), var(--tw-gradient-to))`,
-                    }}
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center ${bgColor}`}
                 >
-                    {icon}
+                    {isReactComponent ? (
+                        <Icon className={`w-6 h-6 ${iconColor}`} />
+                    ) : (
+                        <span className="text-2xl">{Icon}</span>
+                    )}
                 </div>
                 {trend && (
                     <div className="flex items-center gap-1">
                         {getTrendIcon()}
                         {trendValue && (
                             <span className={`text-sm ${trend === 'up' ? 'text-risk-high' :
-                                    trend === 'down' ? 'text-risk-minimal' :
-                                        'text-white/50'
+                                trend === 'down' ? 'text-risk-minimal' :
+                                    'text-white/50'
                                 }`}>
                                 {trendValue}
                             </span>

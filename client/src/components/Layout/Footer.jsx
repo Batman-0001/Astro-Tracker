@@ -11,7 +11,7 @@ const Footer = () => {
                         <div className="md:col-span-2">
                             <Link to="/" className="flex items-center gap-3 mb-4">
                                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center">
-                                    <span className="text-xl">🌍</span>
+                                    <Globe className="w-5 h-5 text-white" />
                                 </div>
                                 <span className="text-xl font-bold text-white">Astral</span>
                             </Link>

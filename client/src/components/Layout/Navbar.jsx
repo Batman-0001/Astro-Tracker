@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Bell, Search, Settings, User, LogOut, Menu, X } from 'lucide-react';
+import { Bell, Search, Settings, User, LogOut, Menu, X, Globe } from 'lucide-react';
 import { useState } from 'react';
 import useAuthStore from '../../stores/authStore';
 import useAlertStore from '../../stores/alertStore';
@@ -36,7 +36,7 @@ const Navbar = () => {
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
                             >
-                                <span className="text-xl">🌍</span>
+                                <Globe className="w-5 h-5 text-white" />
                             </motion.div>
                             <span className="text-xl font-bold text-white">
                                 Astral

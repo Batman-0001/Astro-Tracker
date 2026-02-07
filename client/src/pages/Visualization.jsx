@@ -13,6 +13,9 @@ import {
   ChevronUp,
   SatelliteDish,
   Globe,
+  Radio,
+  AlertTriangle,
+  AlertOctagon,
 } from "lucide-react";
 import useAsteroidStore from "../stores/asteroidStore";
 import Earth3D from "../components/Visualization/Earth3D";
@@ -370,7 +373,7 @@ const Visualization = () => {
             className="flex flex-wrap gap-2 px-4 pb-2 pointer-events-auto"
           >
             <div className="glass px-3 py-1.5 flex items-center gap-2">
-              <span className="text-accent-primary text-sm">📡</span>
+              <Radio className="w-4 h-4 text-accent-primary" />
               <span className="text-white font-medium text-sm">
                 {todayAsteroids.length}
               </span>
@@ -378,7 +381,7 @@ const Visualization = () => {
             </div>
             {hazardousCount > 0 && (
               <div className="glass px-3 py-1.5 flex items-center gap-2">
-                <span className="text-risk-high text-sm">⚠️</span>
+                <AlertTriangle className="w-4 h-4 text-risk-high" />
                 <span className="text-white font-medium text-sm">
                   {hazardousCount}
                 </span>
@@ -387,7 +390,7 @@ const Visualization = () => {
             )}
             {highRiskCount > 0 && (
               <div className="glass px-3 py-1.5 flex items-center gap-2">
-                <span className="text-risk-high text-sm">🔴</span>
+                <AlertOctagon className="w-4 h-4 text-risk-high" />
                 <span className="text-white font-medium text-sm">
                   {highRiskCount}
                 </span>

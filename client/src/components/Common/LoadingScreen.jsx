@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { Globe } from 'lucide-react';
 
 const LoadingScreen = ({ message = 'Loading...' }) => {
     return (
@@ -39,13 +40,13 @@ const LoadingScreen = ({ message = 'Loading...' }) => {
 
                     {/* Center icon */}
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <motion.span
-                            className="text-4xl"
+                        <motion.div
+                            className="flex items-center justify-center"
                             animate={{ rotate: [0, 5, -5, 0] }}
                             transition={{ duration: 4, repeat: Infinity }}
                         >
-                            🌍
-                        </motion.span>
+                            <Globe className="w-8 h-8 text-accent-primary" />
+                        </motion.div>
                     </div>
                 </motion.div>
 

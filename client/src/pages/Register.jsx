@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Loader2, Check } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Loader2, Check, Rocket } from 'lucide-react';
 import useAuthStore from '../stores/authStore';
 
 const Register = () => {
@@ -70,7 +70,7 @@ const Register = () => {
                         className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-accent-secondary to-accent-primary flex items-center justify-center"
                         whileHover={{ scale: 1.05, rotate: -5 }}
                     >
-                        <span className="text-3xl">🚀</span>
+                        <Rocket className="w-8 h-8 text-white" />
                     </motion.div>
                     <h1 className="text-3xl font-bold text-white mb-2">Join Astral</h1>
                     <p className="text-white/50">Create your account to start monitoring</p>
@@ -161,8 +161,8 @@ const Register = () => {
                                 <div
                                     key={i}
                                     className={`flex items-center gap-2 text-sm ${req.test(formData.password)
-                                            ? 'text-risk-minimal'
-                                            : 'text-white/40'
+                                        ? 'text-risk-minimal'
+                                        : 'text-white/40'
                                         }`}
                                 >
                                     <Check className={`w-4 h-4 ${req.test(formData.password) ? 'opacity-100' : 'opacity-30'
@@ -187,9 +187,9 @@ const Register = () => {
                                 onChange={handleChange}
                                 placeholder="••••••••"
                                 className={`input-field pl-12 ${formData.confirmPassword &&
-                                        formData.password !== formData.confirmPassword
-                                        ? 'border-risk-high/50'
-                                        : ''
+                                    formData.password !== formData.confirmPassword
+                                    ? 'border-risk-high/50'
+                                    : ''
                                     }`}
                                 required
                             />

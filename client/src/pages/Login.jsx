@@ -9,6 +9,7 @@ import {
   EyeOff,
   ArrowRight,
   Loader2,
+  Globe,
 } from "lucide-react";
 import useAuthStore from "../stores/authStore";
 
@@ -58,7 +59,7 @@ const Login = () => {
             className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center"
             whileHover={{ scale: 1.05, rotate: 5 }}
           >
-            <span className="text-3xl">🌍</span>
+            <Globe className="w-8 h-8 text-white" />
           </motion.div>
           <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
           <p className="text-white/50">Sign in to continue tracking NEOs</p>
@@ -118,7 +119,7 @@ const Login = () => {
               >
                 {showPassword ?
                   <EyeOff className="w-5 h-5" />
-                : <Eye className="w-5 h-5" />}
+                  : <Eye className="w-5 h-5" />}
               </button>
             </div>
           </div>
@@ -151,7 +152,7 @@ const Login = () => {
                 <Loader2 className="w-5 h-5 animate-spin" />
                 Signing in...
               </>
-            : <>
+              : <>
                 Sign In
                 <ArrowRight className="w-5 h-5" />
               </>
