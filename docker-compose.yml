@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # MongoDB Database
@@ -6,6 +6,7 @@ services:
     image: mongo:7
     container_name: astral-mongodb
     restart: unless-stopped
+    command: ["mongod", "--auth", "--bind_ip_all"]
     ports:
       - "27017:27017"
     environment:
@@ -15,6 +16,7 @@ services:
     volumes:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
+      - ./mongo-init:/docker-entrypoint-initdb.d:ro
     networks:
       - astral-network
 

@@ -1,0 +1,66 @@
+version: "3.8"
+
+# Production overrides — run with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Ensures MongoDB authentication is enforced, Mongo Express is disabled,
+# and both backend + frontend containers are properly wired.
+
+services:
+  # ─── MongoDB with auth enforced ────────────────────────────
+  mongodb:
+    command: ["mongod", "--auth", "--bind_ip_all"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-astral_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASS:-astral_secret_2024}
+      MONGO_INITDB_DATABASE: astral_neo
+    restart: always
+
+  # ─── Disable Mongo Express in production ───────────────────
+  mongo-express:
+    profiles:
+      - debug # won't start unless --profile debug is passed
+
+  # ─── Backend API ───────────────────────────────────────────
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: astral-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-astral_admin}:${MONGO_ROOT_PASS:-astral_secret_2024}@mongodb:27017/astral_neo?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      NASA_API_KEY: ${NASA_API_KEY:-DEMO_KEY}
+      SOCKET_CORS_ORIGIN: ${CORS_ORIGIN:-https://astral.example.com}
+    depends_on:
+      - mongodb
+    networks:
+      - astral-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ─── Frontend (static build served by nginx) ───────────────
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: astral-frontend
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+    networks:
+      - astral-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M

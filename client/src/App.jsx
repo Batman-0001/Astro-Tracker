@@ -18,6 +18,7 @@ import LoadingScreen from "./components/Common/LoadingScreen";
 import ErrorBoundary from "./components/Common/ErrorBoundary";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
 import { ToastContainer } from "./components/Common/Toast";
+import ChatSidebar from "./components/Chat/ChatSidebar";
 import useAuthStore from "./stores/authStore";
 import useAlertStore from "./stores/alertStore";
 import socketService from "./services/socket";
@@ -157,6 +158,9 @@ function App() {
           </main>
 
           <Footer />
+
+          {/* Global Chat Sidebar */}
+          <ChatSidebar />
 
           {/* Toast notifications */}
           <ToastContainer toasts={toasts} onClose={removeToast} />
