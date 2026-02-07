@@ -56,7 +56,7 @@ const Atmosphere = ({
   });
 
   return (
-    <mesh ref={ref} scale={1.18}>
+    <mesh ref={ref} scale={1.18} renderOrder={2}>
       <sphereGeometry args={[radius, 64, 64]} />
       <shaderMaterial
         uniforms={uniforms}
@@ -65,6 +65,7 @@ const Atmosphere = ({
         transparent
         side={THREE.BackSide}
         depthWrite={false}
+        depthTest={true}
         blending={THREE.AdditiveBlending}
       />
     </mesh>

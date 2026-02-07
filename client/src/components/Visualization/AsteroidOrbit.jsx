@@ -15,16 +15,19 @@ const OrbitPath = ({ points, color, opacity = 0.35 }) => {
 
   const geometry = useMemo(() => {
     const geom = new THREE.BufferGeometry().setFromPoints(points);
+    // Manually set a large bounding sphere to prevent frustum culling issues
+    geom.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 100);
     return geom;
   }, [points]);
 
   return (
-    <line ref={lineRef} geometry={geometry}>
+    <line ref={lineRef} geometry={geometry} frustumCulled={false} renderOrder={1}>
       <lineBasicMaterial
         color={color}
         transparent
         opacity={opacity}
         depthWrite={false}
+        depthTest={true}
         linewidth={1}
       />
     </line>
@@ -61,7 +64,7 @@ const OrbitTrail = ({ points, color, trailLength = 40, progress = 0 }) => {
   }, [points, color, trailLength, progress]);
 
   return (
-    <line ref={lineRef} geometry={geometry}>
+    <line ref={lineRef} geometry={geometry} frustumCulled={false} renderOrder={2}>
       <lineBasicMaterial
         vertexColors
         transparent
@@ -197,10 +200,11 @@ const AsteroidOrbit = ({
 
       {/* Asteroid group at position */}
       <group position={[position.x, position.y, position.z]}>
-        {/* Clickable / hoverable invisible sphere */}
+        {/* Clickable / hoverable invisible sphere - larger hitbox for easier clicking */}
         <mesh
           onClick={(e) => {
             e.stopPropagation();
+            console.log("Asteroid clicked:", asteroid.name);
             onSelect?.(asteroid);
           }}
           onPointerOver={(e) => {
@@ -215,7 +219,8 @@ const AsteroidOrbit = ({
             document.body.style.cursor = "auto";
           }}
         >
-          <sphereGeometry args={[visualSize * 2.5, 8, 8]} />
+          {/* Hitbox size: at least 0.4 for easy clicking */}
+          <sphereGeometry args={[Math.max(0.4, visualSize * 3), 16, 16]} />
           <meshBasicMaterial transparent opacity={0} />
         </mesh>
 

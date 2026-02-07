@@ -1,4 +1,4 @@
-import { useRef, useMemo, useCallback, Suspense } from "react";
+import { useRef, useMemo, useCallback, Suspense, useEffect } from "react";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { OrbitControls, Stars } from "@react-three/drei";
 import * as THREE from "three";
@@ -157,24 +157,28 @@ const Earth = ({ sunHourAngle = null }) => {
   return (
     <group>
       {/* Earth with day/night shader */}
-      <mesh ref={earthRef}>
+      <mesh ref={earthRef} renderOrder={0}>
         <sphereGeometry args={[2, 128, 64]} />
         <shaderMaterial
           uniforms={earthUniforms}
           vertexShader={earthVertexShader}
           fragmentShader={earthFragmentShader}
+          depthWrite={true}
+          depthTest={true}
         />
       </mesh>
 
       {/* Cloud layer */}
-      <mesh ref={cloudsRef}>
+      <mesh ref={cloudsRef} renderOrder={1}>
         <sphereGeometry args={[2.025, 64, 64]} />
         <meshStandardMaterial
           map={cloudsTexture}
           transparent
           opacity={0.35}
           depthWrite={false}
+          depthTest={true}
           blending={THREE.NormalBlending}
+          side={THREE.FrontSide}
         />
       </mesh>
 
@@ -194,6 +198,8 @@ const ReferenceRing = ({
   opacity = 0.08,
   dashed = false,
 }) => {
+  const lineRef = useRef();
+
   const points = useMemo(() => {
     const pts = [];
     const segments = 128;
@@ -210,20 +216,39 @@ const ReferenceRing = ({
     return pts;
   }, [radius]);
 
-  const geometry = useMemo(
-    () => new THREE.BufferGeometry().setFromPoints(points),
-    [points],
-  );
+  const geometry = useMemo(() => {
+    const geom = new THREE.BufferGeometry().setFromPoints(points);
+    // Required for dashed lines to work properly
+    geom.computeBoundingSphere();
+    return geom;
+  }, [points]);
+
+  // Compute line distances after mount for dashed lines
+  useEffect(() => {
+    if (lineRef.current && dashed) {
+      lineRef.current.computeLineDistances();
+    }
+  }, [dashed, geometry]);
 
   return (
-    <line geometry={geometry}>
-      <lineDashedMaterial
-        color={color}
-        transparent
-        opacity={opacity}
-        dashSize={dashed ? 0.3 : 100}
-        gapSize={dashed ? 0.15 : 0}
-      />
+    <line ref={lineRef} geometry={geometry} frustumCulled={false} renderOrder={-1}>
+      {dashed ? (
+        <lineDashedMaterial
+          color={color}
+          transparent
+          opacity={opacity}
+          dashSize={0.3}
+          gapSize={0.15}
+          depthWrite={false}
+        />
+      ) : (
+        <lineBasicMaterial
+          color={color}
+          transparent
+          opacity={opacity}
+          depthWrite={false}
+        />
+      )}
     </line>
   );
 };
@@ -275,9 +300,11 @@ const Scene = ({
   hoveredAsteroid = null,
   onSelectAsteroid,
   onHoverAsteroid,
-  useFreeCamera = false,
+  onDeselectAsteroid,
   sunHourAngle = null,
 }) => {
+  const orbitControlsRef = useRef();
+
   return (
     <>
       {/* Lighting */}
@@ -323,24 +350,29 @@ const Scene = ({
         />
       ))}
 
-      {/* Camera */}
-      {useFreeCamera ?
-        <OrbitControls
-          enableZoom
-          enablePan={false}
-          minDistance={3.5}
-          maxDistance={25}
-          autoRotate={!selectedAsteroid}
-          autoRotateSpeed={0.3}
-          enableDamping
-          dampingFactor={0.05}
-        />
-      : <CameraController
-          targetAsteroid={selectedAsteroid}
-          timeOffset={timeOffset}
-          enabled={true}
-        />
-      }
+      {/* OrbitControls - always enabled for 3D maneuvering */}
+      <OrbitControls
+        ref={orbitControlsRef}
+        enableZoom
+        enablePan={false}
+        minDistance={4}
+        maxDistance={30}
+        zoomSpeed={2}
+        rotateSpeed={0.8}
+        autoRotate={!selectedAsteroid}
+        autoRotateSpeed={0.3}
+        enableDamping
+        dampingFactor={0.05}
+      />
+
+      {/* Camera transition controller */}
+      <CameraController
+        targetAsteroid={selectedAsteroid}
+        timeOffset={timeOffset}
+        enabled={true}
+        orbitControlsRef={orbitControlsRef}
+        onDeselect={onDeselectAsteroid}
+      />
     </>
   );
 };
@@ -354,23 +386,24 @@ const Earth3D = ({
   hoveredAsteroid = null,
   onSelectAsteroid,
   onHoverAsteroid,
-  useFreeCamera = false,
+  onDeselectAsteroid,
   sunHourAngle = null,
 }) => {
   return (
     <div className={`relative ${className}`}>
       <Canvas
-        camera={{ position: [0, 3, 9], fov: 45 }}
+        camera={{ position: [0, 3, 9], fov: 45, near: 0.01, far: 1000 }}
         gl={{
           antialias: true,
           alpha: true,
           powerPreference: "high-performance",
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.2,
+          logarithmicDepthBuffer: true,
         }}
         style={{ background: "transparent" }}
         dpr={[1, 2]}
-        onPointerMissed={() => onSelectAsteroid?.(null)}
+        onPointerMissed={() => onDeselectAsteroid?.()}
       >
         <Scene
           asteroids={asteroids}
@@ -379,7 +412,7 @@ const Earth3D = ({
           hoveredAsteroid={hoveredAsteroid}
           onSelectAsteroid={onSelectAsteroid}
           onHoverAsteroid={onHoverAsteroid}
-          useFreeCamera={useFreeCamera}
+          onDeselectAsteroid={onDeselectAsteroid}
           sunHourAngle={sunHourAngle}
         />
       </Canvas>
@@ -388,3 +421,4 @@ const Earth3D = ({
 };
 
 export default Earth3D;
+

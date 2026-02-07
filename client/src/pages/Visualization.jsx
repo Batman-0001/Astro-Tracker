@@ -5,8 +5,6 @@ import {
   Info,
   Maximize2,
   Minimize2,
-  Eye,
-  EyeOff,
   MousePointerClick,
   Move3D,
   List,
@@ -14,6 +12,7 @@ import {
   ChevronDown,
   ChevronUp,
   SatelliteDish,
+  Globe,
 } from "lucide-react";
 import useAsteroidStore from "../stores/asteroidStore";
 import Earth3D from "../components/Visualization/Earth3D";
@@ -37,7 +36,6 @@ const Visualization = () => {
   const [showAsteroidList, setShowAsteroidList] = useState(false);
   const [selectedAsteroid, setSelectedAsteroid] = useState(null);
   const [hoveredAsteroid, setHoveredAsteroid] = useState(null);
-  const [useFreeCamera, setUseFreeCamera] = useState(true);
 
   // Sun clock
   const [sunHourAngle, setSunHourAngle] = useState(() => {
@@ -64,7 +62,6 @@ const Visualization = () => {
       const found = todayAsteroids.find((a) => a.neo_reference_id === focusId);
       if (found) {
         setSelectedAsteroid(found);
-        setUseFreeCamera(false);
       }
     }
   }, [searchParams, todayAsteroids]);
@@ -115,16 +112,25 @@ const Visualization = () => {
   }, [isFullscreen]);
 
   const handleSelectAsteroid = useCallback((asteroid) => {
+    console.log("handleSelectAsteroid called with:", asteroid?.name || "null");
     setSelectedAsteroid(asteroid);
-    if (asteroid) {
-      setUseFreeCamera(false);
-    }
   }, []);
 
   const handleDeselectAsteroid = useCallback(() => {
+    console.log("handleDeselectAsteroid called");
     setSelectedAsteroid(null);
-    setUseFreeCamera(true);
   }, []);
+
+  // Keyboard shortcut: Escape to deselect and return to Earth
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && selectedAsteroid) {
+        handleDeselectAsteroid();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedAsteroid, handleDeselectAsteroid]);
 
   const handleNavigateToDetail = useCallback(
     (id) => {
@@ -172,13 +178,32 @@ const Visualization = () => {
             hoveredAsteroid={hoveredAsteroid}
             onSelectAsteroid={handleSelectAsteroid}
             onHoverAsteroid={setHoveredAsteroid}
-            useFreeCamera={useFreeCamera}
+            onDeselectAsteroid={handleDeselectAsteroid}
             sunHourAngle={sunHourAngle}
           />
         </Suspense>
 
         {/* ─── Top-right toolbar ─────────────────────────── */}
         <div className="absolute top-4 right-4 flex gap-2 z-10">
+          {/* Back to Earth button - shows when asteroid is selected */}
+          <AnimatePresence>
+            {selectedAsteroid && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.8, x: 20 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.8, x: 20 }}
+                onClick={handleDeselectAsteroid}
+                className="px-4 py-2 glass bg-accent-primary/20 hover:bg-accent-primary/30 border border-accent-primary/40 transition-colors flex items-center gap-2"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                title="Return to Earth view (Esc)"
+              >
+                <Globe className="w-4 h-4 text-accent-primary" />
+                <span className="text-sm font-medium text-white">Back to Earth</span>
+              </motion.button>
+            )}
+          </AnimatePresence>
+
           <motion.button
             onClick={() => setShowInfo((prev) => !prev)}
             className="p-3 glass hover:bg-white/10 transition-colors"
@@ -200,21 +225,6 @@ const Visualization = () => {
           </motion.button>
 
           <motion.button
-            onClick={() => {
-              setUseFreeCamera((prev) => !prev);
-              if (!useFreeCamera) setSelectedAsteroid(null);
-            }}
-            className={`p-3 glass transition-colors ${useFreeCamera ? "bg-accent-primary/20 border-accent-primary/40" : "hover:bg-white/10"}`}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            title={
-              useFreeCamera ? "Free camera (active)" : "Switch to free camera"
-            }
-          >
-            <Move3D className="w-5 h-5 text-white" />
-          </motion.button>
-
-          <motion.button
             onClick={toggleFullscreen}
             className="p-3 glass hover:bg-white/10 transition-colors"
             whileHover={{ scale: 1.05 }}
@@ -222,7 +232,7 @@ const Visualization = () => {
           >
             {isFullscreen ?
               <Minimize2 className="w-5 h-5 text-white" />
-            : <Maximize2 className="w-5 h-5 text-white" />}
+              : <Maximize2 className="w-5 h-5 text-white" />}
           </motion.button>
         </div>
 
@@ -327,11 +337,10 @@ const Visualization = () => {
                       onClick={() => handleSelectAsteroid(asteroid)}
                       onMouseEnter={() => setHoveredAsteroid(asteroid)}
                       onMouseLeave={() => setHoveredAsteroid(null)}
-                      className={`w-full text-left px-3 py-2 rounded-xl flex items-center gap-2.5 transition-all text-sm ${
-                        isSelected ?
-                          "bg-accent-primary/15 border border-accent-primary/30"
+                      className={`w-full text-left px-3 py-2 rounded-xl flex items-center gap-2.5 transition-all text-sm ${isSelected ?
+                        "bg-accent-primary/15 border border-accent-primary/30"
                         : "hover:bg-white/5 border border-transparent"
-                      }`}
+                        }`}
                     >
                       <span
                         className={`w-2 h-2 rounded-full flex-shrink-0 ${riskColors[asteroid.riskCategory] || "bg-risk-minimal"}`}
